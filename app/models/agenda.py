@@ -15,6 +15,7 @@ class AppointmentState(str, enum.Enum):
     CONFIRMADO = "confirmado"
     PAGADO = "pagado"
     CANCELADO = "cancelado"
+    ATENDIDO = "atendido"
 
 
 class Clinic(Base):

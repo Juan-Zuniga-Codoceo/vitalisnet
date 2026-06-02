@@ -23,6 +23,7 @@ from app.core.database import Base
 from app.models.agenda import Clinic, Professional, Patient, Appointment
 from app.models.finanzas import Payment, FinancialTransaction
 from app.models.auth import User
+from app.models.clinical import ClinicalFile, ClinicalConsultation
 
 # Establecer la URL de conexión dinámica desde settings
 config.set_main_option("sqlalchemy.url", settings.ASYNC_DATABASE_URI)

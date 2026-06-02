@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.routers.agenda import router as agenda_router
 from app.routers.finanzas import router as finance_router
 from app.routers.auth import router as auth_router
+from app.routers.clinical import router as clinical_router
 
 app = FastAPI(
     title="VitalisNet API",
@@ -33,6 +34,7 @@ app.add_middleware(
 app.include_router(agenda_router, prefix="/api/v1")
 app.include_router(finance_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(clinical_router, prefix="/api/v1")
 
 @app.get("/health", status_code=status.HTTP_200_OK)
 async def health_check(db: AsyncSession = Depends(get_db)) -> dict[str, str]:
