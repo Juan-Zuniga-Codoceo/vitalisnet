@@ -1,3 +1,4 @@
+from typing import List
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import Range
@@ -5,6 +6,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.models.auth import User
+from app.dependencies.auth import get_current_user
 from app.models.agenda import Appointment, Clinic, Patient, Professional
 from app.schemas.agenda import (
     AppointmentCreate,
@@ -96,6 +99,23 @@ async def create_professional(
             detail=f"Error al registrar al profesional: {str(e.orig)}",
         )
     return db_prof
+
+
+@router.get(
+    "/professionals",
+    response_model=List[ProfessionalResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Listar todos los profesionales de la clínica",
+)
+async def list_professionals(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> List[Professional]:
+    stmt = select(Professional)
+    if current_user.clinic_id:
+        stmt = stmt.where(Professional.clinic_id == current_user.clinic_id)
+    res = await db.execute(stmt)
+    return list(res.scalars().all())
 
 
 # ---------------------------------------------

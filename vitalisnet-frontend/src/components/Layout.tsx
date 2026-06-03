@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { 
   Calendar, 
@@ -19,6 +20,39 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) => {
   const { user, logout } = useAuth();
+
+  const [pendingProposal, setPendingProposal] = useState<any | null>(null);
+
+  const fetchPendingProposal = async () => {
+    try {
+      const response = await axios.get('/finance/commission/agreements');
+      // Buscar el acuerdo PENDIENTE más reciente
+      const pending = response.data.find((ag: any) => ag.estado === 'PENDIENTE');
+      setPendingProposal(pending || null);
+    } catch (err) {
+      console.error("Error fetching agreements for layout banner:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (user?.rol === 'profesional') {
+      fetchPendingProposal();
+    }
+  }, [user]);
+
+  const handleRespondProposal = async (agreementId: number, accept: boolean) => {
+    try {
+      await axios.put(`/finance/commission/respond/${agreementId}`, {
+        estado: accept ? 'ACEPTADO' : 'RECHAZADO'
+      });
+      // Limpiar banner
+      setPendingProposal(null);
+      alert(accept ? "Has aceptado la propuesta de comisión." : "Has rechazado la propuesta de comisión.");
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.detail || "Error al responder a la propuesta.");
+    }
+  };
 
   // Mapeo estático del nombre de la clínica a partir del clinic_id
   const getClinicName = (id: number | null | undefined) => {
@@ -131,6 +165,32 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
             </button>
           </div>
         </header>
+
+        {pendingProposal && (
+          <div className="bg-[#7F9C7A]/15 border-b border-[#7F9C7A]/30 px-8 py-3 flex items-center justify-between text-xs text-[#2A4B27] font-semibold">
+            <div className="flex items-center space-x-2">
+              <span className="p-1 bg-[#7F9C7A]/25 rounded text-[#7F9C7A]">📢</span>
+              <span>
+                El centro médico ha propuesto un nuevo acuerdo de comisión del{' '}
+                <span className="font-bold text-sm text-[#2A4B27]">{parseFloat(pendingProposal.porcentaje_propuesto).toFixed(1)}%</span>.
+              </span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <button 
+                onClick={() => handleRespondProposal(pendingProposal.id, true)}
+                className="bg-[#7F9C7A] hover:bg-[#7F9C7A]/90 text-white font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all"
+              >
+                Aceptar
+              </button>
+              <button 
+                onClick={() => handleRespondProposal(pendingProposal.id, false)}
+                className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all"
+              >
+                Rechazar
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Contenido de la Vista */}
         <main className="flex-1 overflow-y-auto p-8 bg-[#F4F6F8] focus:outline-none">

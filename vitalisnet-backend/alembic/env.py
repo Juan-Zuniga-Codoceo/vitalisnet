@@ -21,7 +21,7 @@ from app.core.config import settings
 from app.core.database import Base
 # Importar todos los modelos para que Alembic los registre
 from app.models.agenda import Clinic, Professional, Patient, Appointment
-from app.models.finanzas import Payment, FinancialTransaction
+from app.models.finanzas import Payment, FinancialTransaction, CommissionAgreement
 from app.models.auth import User
 from app.models.clinical import ClinicalFile, ClinicalConsultation
 

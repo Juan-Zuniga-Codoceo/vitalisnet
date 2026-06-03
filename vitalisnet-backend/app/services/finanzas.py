@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.agenda import Appointment, AppointmentState, Professional
-from app.models.finanzas import FinancialTransaction, Payment, PaymentState
+from app.models.finanzas import FinancialTransaction, Payment, PaymentState, CommissionAgreement, CommissionState
 
 
 async def registrar_y_procesar_pago(
@@ -69,13 +69,25 @@ async def registrar_y_procesar_pago(
     # Asegurar la inserción del pago para obtener su ID
     await db.flush()
 
-    # 4. Obtener el porcentaje de comisión del profesional
-    stmt_prof = select(Professional).where(Professional.id == appointment.professional_id)
-    result_prof = await db.execute(stmt_prof)
-    professional = result_prof.scalar_one()
+    # 4. Obtener el porcentaje de comisión del profesional (acuerdo ACEPTADO más reciente o 70% por defecto)
+    stmt_agree = (
+        select(CommissionAgreement)
+        .where(
+            CommissionAgreement.professional_id == appointment.professional_id,
+            CommissionAgreement.estado == CommissionState.ACEPTADO
+        )
+        .order_by(CommissionAgreement.id.desc())
+        .limit(1)
+    )
+    result_agree = await db.execute(stmt_agree)
+    agreement = result_agree.scalar_one_or_none()
+
+    if agreement:
+        comision_pct = Decimal(str(agreement.porcentaje_propuesto))
+    else:
+        comision_pct = Decimal("70.00")
 
     # 5. Calcular los montos correspondientes
-    comision_pct = Decimal(str(professional.comision_porcentaje))
     monto_profesional = (comision_pct / Decimal("100.00")) * monto
     monto_centro = monto - monto_profesional
 

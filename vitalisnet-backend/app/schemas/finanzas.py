@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.finanzas import PaymentMethod, PaymentState
+from app.models.finanzas import PaymentMethod, PaymentState, CommissionState
 
 
 class PaymentCreate(BaseModel):
@@ -28,3 +28,24 @@ class FinancialReportResponse(BaseModel):
     monto_profesional: float = Field(..., description="Suma del dinero acumulado para el médico profesional")
     monto_centro: float = Field(..., description="Suma del dinero acumulado para el centro médico")
     citas_pagadas_cantidad: int = Field(..., description="Cantidad total de citas pagadas en el periodo")
+
+
+class CommissionAgreementPropose(BaseModel):
+    professional_id: int
+    porcentaje_propuesto: float = Field(..., ge=0, le=100, description="Porcentaje propuesto para el profesional (0-100)")
+
+
+class CommissionAgreementRespond(BaseModel):
+    estado: CommissionState = Field(..., description="Nuevo estado del acuerdo (ACEPTADO o RECHAZADO)")
+
+
+class CommissionAgreementResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    clinic_id: int
+    professional_id: int
+    porcentaje_propuesto: float
+    estado: CommissionState
+    fecha_propuesta: datetime
+    fecha_respuesta: Optional[datetime] = None
+

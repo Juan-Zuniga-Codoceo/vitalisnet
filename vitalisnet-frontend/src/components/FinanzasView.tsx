@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import axios from 'axios';
 import { 
   TrendingUp, 
   DollarSign, 
@@ -39,10 +41,65 @@ const INITIAL_TRANSACTIONS: Transaction[] = [
   { id: 9, date: dayjs().subtract(15, 'day').format('YYYY-MM-DD'), patient: 'Bernardo O\'Higgins', professional: 'Dra. Eloísa Díaz', price: 60000, method: 'Efectivo', status: 'pagada' },
 ];
 
+
 export const FinanzasView: React.FC = () => {
+  const { user } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
   const [selectedProfessional, setSelectedProfessional] = useState<string>('Todos');
   const [selectedRange, setSelectedRange] = useState<'Hoy' | 'Semana' | 'Mes'>('Mes');
+  
+  const [dbProfessionals, setDbProfessionals] = useState<any[]>([]);
+  const [propPct, setPropPct] = useState<number>(70);
+  const [agreements, setAgreements] = useState<any[]>([]);
+
+  // Obtener la lista de profesionales desde el backend
+  useEffect(() => {
+    const fetchProfessionals = async () => {
+      try {
+        const response = await axios.get('/professionals');
+        setDbProfessionals(response.data);
+      } catch (err) {
+        console.error("Error fetching professionals:", err);
+      }
+    };
+    if (user) {
+      fetchProfessionals();
+    }
+  }, [user]);
+
+  const selectedProfObj = dbProfessionals.find(p => p.nombre === selectedProfessional);
+  const selectedProfId = selectedProfObj ? selectedProfObj.id : null;
+
+  const fetchAgreements = async () => {
+    try {
+      const response = await axios.get('/finance/commission/agreements' + (selectedProfId ? `?professional_id=${selectedProfId}` : ''));
+      setAgreements(response.data);
+    } catch (err) {
+      console.error("Error fetching commission agreements:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (user?.rol === 'admin_centro') {
+      fetchAgreements();
+    }
+  }, [selectedProfessional, user, selectedProfId]);
+
+  const handleProposeCommission = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProfId) return;
+    try {
+      await axios.post('/finance/commission/propose', {
+        professional_id: selectedProfId,
+        porcentaje_propuesto: propPct
+      });
+      fetchAgreements();
+      alert("Propuesta de comisión enviada con éxito.");
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.detail || "Error al enviar la propuesta.");
+    }
+  };
   
   // Modal de cobro
   const [isCobrarModalOpen, setIsCobrarModalOpen] = useState(false);
@@ -181,8 +238,9 @@ export const FinanzasView: React.FC = () => {
               className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-[#1A5F7A] transition-all"
             >
               <option value="Todos">Todos los Profesionales</option>
-              <option value="Dra. Eloísa Díaz">Dra. Eloísa Díaz</option>
-              <option value="Dr. Alejandro del Río">Dr. Alejandro del Río</option>
+              {dbProfessionals.map((p) => (
+                <option key={p.id} value={p.nombre}>{p.nombre}</option>
+              ))}
             </select>
           </div>
 
@@ -204,6 +262,94 @@ export const FinanzasView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* 2.5. NEGOCIACIÓN DE COMISIONES (SOLO PARA ADMIN Y CUANDO SE SELECCIONA UN MÉDICO INDIVIDUAL) */}
+      {user?.rol === 'admin_centro' && selectedProfessional !== 'Todos' && (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Formulario de Propuesta */}
+          <div className="lg:col-span-1 border-r border-slate-100 pr-6 space-y-4">
+            <div>
+              <h4 className="font-display font-bold text-sm text-[#1E293B]">Nueva Propuesta de Comisión</h4>
+              <p className="text-[11px] text-slate-400 font-medium">Define un porcentaje personalizado para {selectedProfessional}</p>
+            </div>
+            
+            <form onSubmit={handleProposeCommission} className="flex items-end gap-3">
+              <div className="flex-1">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  Porcentaje (%)
+                </label>
+                <input 
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={propPct}
+                  onChange={(e) => setPropPct(parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1A5F7A] text-slate-700 font-bold"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                className="bg-[#E88D4D] hover:bg-[#E88D4D]/90 text-white font-bold text-xs py-2 px-4 rounded-xl shadow-md transition-all duration-200 h-10 flex-shrink-0"
+              >
+                Proponer
+              </button>
+            </form>
+          </div>
+
+          {/* Historial de Propuestas */}
+          <div className="lg:col-span-2 space-y-4">
+            <div>
+              <h4 className="font-display font-bold text-sm text-[#1E293B]">Historial de Propuestas</h4>
+              <p className="text-[11px] text-slate-400 font-medium">Acuerdos enviados y su estado de negociación</p>
+            </div>
+
+            {agreements.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">No hay propuestas registradas para este profesional.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-100">
+                      <th className="py-2 px-3">Fecha Propuesta</th>
+                      <th className="py-2 px-3">Porcentaje</th>
+                      <th className="py-2 px-3">Estado</th>
+                      <th className="py-2 px-3">Fecha Respuesta</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {agreements.map((ag) => (
+                      <tr key={ag.id} className="hover:bg-slate-50/50">
+                        <td className="py-2 px-3 text-slate-500 font-medium">
+                          {dayjs(ag.fecha_propuesta).format('DD/MM/YYYY HH:mm')}
+                        </td>
+                        <td className="py-2 px-3 font-bold text-[#1A5F7A]">
+                          {parseFloat(ag.porcentaje_propuesto).toFixed(1)}%
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] uppercase tracking-wider ${
+                            ag.estado === 'PENDIENTE' 
+                              ? 'bg-amber-100 text-amber-800' 
+                              : ag.estado === 'ACEPTADO' 
+                              ? 'bg-emerald-100 text-emerald-800' 
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {ag.estado}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-slate-400">
+                          {ag.fecha_respuesta ? dayjs(ag.fecha_respuesta).format('DD/MM/YYYY HH:mm') : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 3. CONTROL DE CAJA Y TRANSACCIONES */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">

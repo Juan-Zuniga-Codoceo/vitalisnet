@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,8 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.models.agenda import Appointment, Professional
 from app.models.auth import User, UserRole
-from app.models.finanzas import FinancialTransaction, Payment
-from app.schemas.finanzas import FinancialReportResponse, PaymentCreate, PaymentResponse
+from app.models.finanzas import FinancialTransaction, Payment, CommissionAgreement, CommissionState
+from app.schemas.finanzas import (
+    FinancialReportResponse,
+    PaymentCreate,
+    PaymentResponse,
+    CommissionAgreementPropose,
+    CommissionAgreementRespond,
+    CommissionAgreementResponse,
+)
 from app.services.finanzas import registrar_y_procesar_pago
 from app.dependencies.auth import get_current_user
 from app.services.mercadopago import mercadopago_service
@@ -161,3 +168,175 @@ async def create_subscription_preference():
         "init_point": res["init_point"],
         "sandbox_init_point": res["sandbox_init_point"]
     }
+
+
+# ---------------------------------------------
+# Endpoints para Negociación de Comisiones
+# ---------------------------------------------
+@router.post(
+    "/finance/commission/propose",
+    response_model=CommissionAgreementResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Proponer un nuevo porcentaje de comisión para un profesional",
+)
+async def propose_commission(
+    payload: CommissionAgreementPropose,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> CommissionAgreement:
+    """
+    Permite al Administrador del Centro proponer un nuevo acuerdo de comisión a un profesional.
+    El acuerdo inicia en estado 'PENDIENTE'.
+    """
+    if current_user.rol != UserRole.ADMIN_CENTRO:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo los administradores del centro pueden proponer acuerdos de comisión.",
+        )
+
+    if not current_user.clinic_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El administrador no tiene una clínica asociada.",
+        )
+
+    # Validar que el profesional exista y pertenezca a la misma clínica
+    prof_stmt = select(Professional).where(Professional.id == payload.professional_id)
+    prof_res = await db.execute(prof_stmt)
+    professional = prof_res.scalar_one_or_none()
+
+    if not professional:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="El profesional especificado no existe.",
+        )
+
+    if professional.clinic_id != current_user.clinic_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para proponer comisiones a profesionales de otras clínicas.",
+        )
+
+    # Crear el acuerdo
+    agreement = CommissionAgreement(
+        clinic_id=current_user.clinic_id,
+        professional_id=payload.professional_id,
+        porcentaje_propuesto=payload.porcentaje_propuesto,
+        estado=CommissionState.PENDIENTE,
+        fecha_propuesta=datetime.now(),
+    )
+    db.add(agreement)
+    await db.commit()
+    await db.refresh(agreement)
+    return agreement
+
+
+@router.put(
+    "/finance/commission/respond/{agreement_id}",
+    response_model=CommissionAgreementResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Aceptar o rechazar una propuesta de comisión",
+)
+async def respond_commission(
+    agreement_id: int,
+    payload: CommissionAgreementRespond,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> CommissionAgreement:
+    """
+    Permite al profesional médico aceptar o rechazar un acuerdo de comisión propuesto.
+    """
+    if current_user.rol != UserRole.PROFESIONAL:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo los profesionales médicos pueden responder a las propuestas de comisión.",
+        )
+
+    # Obtener el acuerdo
+    agree_stmt = select(CommissionAgreement).where(CommissionAgreement.id == agreement_id)
+    agree_res = await db.execute(agree_stmt)
+    agreement = agree_res.scalar_one_or_none()
+
+    if not agreement:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="La propuesta de acuerdo especificada no existe.",
+        )
+
+    # Validar que pertenezca al profesional logueado
+    prof_stmt = select(Professional).where(Professional.user_id == current_user.id)
+    prof_res = await db.execute(prof_stmt)
+    professional = prof_res.scalar_one_or_none()
+
+    if not professional or agreement.professional_id != professional.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para responder a esta propuesta de comisión.",
+        )
+
+    if agreement.estado != CommissionState.PENDIENTE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Esta propuesta ya ha sido respondida previamente.",
+        )
+
+    # Actualizar estado y fecha
+    agreement.estado = payload.estado
+    agreement.fecha_respuesta = datetime.now()
+
+    # Si se acepta, actualizar el porcentaje actual del profesional para coherencia
+    if payload.estado == CommissionState.ACEPTADO:
+        professional.comision_porcentaje = agreement.porcentaje_propuesto
+
+    await db.commit()
+    await db.refresh(agreement)
+    return agreement
+
+
+@router.get(
+    "/finance/commission/agreements",
+    response_model=List[CommissionAgreementResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Obtener el historial de acuerdos de comisión",
+)
+async def get_commission_agreements(
+    professional_id: Optional[int] = Query(None, description="Filtrar por profesional (solo Admin)"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> List[CommissionAgreement]:
+    """
+    Obtiene el listado de propuestas de comisión según el rol:
+    - Admin Centro: Todas las propuestas de su clínica (opcionalmente filtrado por profesional).
+    - Profesional: Sus propias propuestas de comisión.
+    """
+    if current_user.rol == UserRole.ADMIN_CENTRO:
+        if not current_user.clinic_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El administrador no tiene una clínica asociada.",
+            )
+        stmt = select(CommissionAgreement).where(CommissionAgreement.clinic_id == current_user.clinic_id)
+        if professional_id:
+            stmt = stmt.where(CommissionAgreement.professional_id == professional_id)
+
+    elif current_user.rol == UserRole.PROFESIONAL:
+        prof_stmt = select(Professional).where(Professional.user_id == current_user.id)
+        prof_res = await db.execute(prof_stmt)
+        professional = prof_res.scalar_one_or_none()
+
+        if not professional:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="El perfil profesional del usuario no existe.",
+            )
+        stmt = select(CommissionAgreement).where(CommissionAgreement.professional_id == professional.id)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Rol no autorizado para visualizar acuerdos de comisión.",
+        )
+
+    stmt = stmt.order_by(CommissionAgreement.id.desc())
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
