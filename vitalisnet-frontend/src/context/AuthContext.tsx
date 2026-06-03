@@ -3,6 +3,11 @@ import type { ReactNode } from 'react';
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
 
+// Configurar URL de producción/desarrollo dinámicamente
+axios.defaults.baseURL = window.location.hostname === 'localhost'
+  ? 'http://localhost:8000/api/v1'
+  : 'https://api.vitalisnet.synapsedev.cl/api/v1';
+
 export interface User {
   id: string;
   rol: string;
@@ -35,7 +40,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const login = async (email: string, password: string) => {
     try {
       const response = await axios.post<{ access_token: string; token_type: string }>(
-        'https://api.vitalisnet.synapsedev.cl/api/v1/auth/login',
+        '/auth/login',
         { email, password }
       );
 
