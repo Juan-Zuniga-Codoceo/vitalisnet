@@ -113,7 +113,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin }) => {
             disabled={loadingSubscription}
             className="w-full sm:w-auto flex items-center justify-center bg-[#1A5F7A] hover:bg-[#1A5F7A]/95 text-white font-bold text-sm px-8 py-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
           >
-            {loadingSubscription ? 'Generando Suscripción...' : 'Probar VitalisNet 14 días gratis'}
+            {loadingSubscription ? 'Generando Suscripción...' : 'Probar VitalisNet 1 mes gratis'}
             <ArrowRight className="ml-2 h-4 w-4" />
           </button>
           <a 
