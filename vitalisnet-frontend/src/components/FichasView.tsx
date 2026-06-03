@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { 
   Search, 
@@ -105,7 +105,12 @@ const INITIAL_CONSULTATIONS: ClinicalConsultation[] = [
   }
 ];
 
-export const FichasView: React.FC = () => {
+interface FichasViewProps {
+  preselectedPatientRut?: string;
+  onClearPreselected?: () => void;
+}
+
+export const FichasView: React.FC<FichasViewProps> = ({ preselectedPatientRut, onClearPreselected }) => {
   const { user } = useAuth();
   const [patients] = useState<Patient[]>(INITIAL_PATIENTS);
   const [consultations, setConsultations] = useState<ClinicalConsultation[]>(INITIAL_CONSULTATIONS);
@@ -150,6 +155,19 @@ export const FichasView: React.FC = () => {
     setEstatura('');
     setCie10('');
   };
+
+  useEffect(() => {
+    if (preselectedPatientRut) {
+      setSearchQuery(preselectedPatientRut);
+      const found = patients.find(p => p.rut === preselectedPatientRut);
+      if (found) {
+        handleSelectPatient(found);
+      }
+      if (onClearPreselected) {
+        onClearPreselected();
+      }
+    }
+  }, [preselectedPatientRut, patients]);
 
   const handleSaveEvolution = (e: React.FormEvent) => {
     e.preventDefault();

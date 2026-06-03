@@ -17,7 +17,11 @@ const INITIAL_PATIENTS = [
 ];
 
 // --- SECCIÓN: PACIENTES ---
-const PacientesView: React.FC = () => {
+interface PacientesViewProps {
+  onViewFile: (rut: string) => void;
+}
+
+const PacientesView: React.FC<PacientesViewProps> = ({ onViewFile }) => {
   const [patients] = useState(INITIAL_PATIENTS);
   const [search, setSearch] = useState('');
 
@@ -79,7 +83,12 @@ const PacientesView: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 text-slate-500">{patient.lastVisit}</td>
                   <td className="px-6 py-4 text-right">
-                    <button className="text-xs text-[#1A5F7A] hover:text-[#1A5F7A]/80 font-bold">Ver Ficha</button>
+                    <button 
+                      onClick={() => onViewFile(patient.rut)}
+                      className="text-xs text-[#1A5F7A] hover:text-[#1A5F7A]/80 font-bold"
+                    >
+                      Ver Ficha
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -100,14 +109,25 @@ function App() {
   const { isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState('agenda');
   const [currentView, setCurrentView] = useState<'landing' | 'login'>('landing');
+  const [preselectedPatientRut, setPreselectedPatientRut] = useState<string | undefined>(undefined);
+
+  const handleViewFile = (rut: string) => {
+    setPreselectedPatientRut(rut);
+    setActiveTab('fichas');
+  };
 
   // Enrutamiento condicional
   if (isAuthenticated) {
     return (
       <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
         {activeTab === 'agenda' && <AgendaView />}
-        {activeTab === 'pacientes' && <PacientesView />}
-        {activeTab === 'fichas' && <FichasView />}
+        {activeTab === 'pacientes' && <PacientesView onViewFile={handleViewFile} />}
+        {activeTab === 'fichas' && (
+          <FichasView 
+            preselectedPatientRut={preselectedPatientRut} 
+            onClearPreselected={() => setPreselectedPatientRut(undefined)} 
+          />
+        )}
         {activeTab === 'finanzas' && <FinanzasView />}
       </Layout>
     );

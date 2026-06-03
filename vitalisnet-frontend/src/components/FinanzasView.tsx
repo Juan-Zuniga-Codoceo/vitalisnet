@@ -46,12 +46,15 @@ const INITIAL_TRANSACTIONS: Transaction[] = [
 export const FinanzasView: React.FC = () => {
   const { user } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
-  const [selectedProfessional, setSelectedProfessional] = useState<string>('Todos');
+  const [selectedProfId, setSelectedProfId] = useState<number | null>(null);
   const [selectedRange, setSelectedRange] = useState<'Hoy' | 'Semana' | 'Mes'>('Mes');
   
   const [dbProfessionals, setDbProfessionals] = useState<any[]>([]);
   const [propPct, setPropPct] = useState<number>(70);
   const [agreements, setAgreements] = useState<any[]>([]);
+
+  const selectedProfObj = dbProfessionals.find(p => p.id === selectedProfId);
+  const selectedProfessional = selectedProfObj ? selectedProfObj.nombre : 'Todos';
 
   // Obtener la lista de profesionales desde el backend
   useEffect(() => {
@@ -68,9 +71,6 @@ export const FinanzasView: React.FC = () => {
     }
   }, [user]);
 
-  const selectedProfObj = dbProfessionals.find(p => p.nombre === selectedProfessional);
-  const selectedProfId = selectedProfObj ? selectedProfObj.id : null;
-
   const fetchAgreements = async () => {
     try {
       const response = await axios.get('/finance/commission/agreements' + (selectedProfId ? `?professional_id=${selectedProfId}` : ''));
@@ -84,7 +84,7 @@ export const FinanzasView: React.FC = () => {
     if (user?.rol === 'admin_centro') {
       fetchAgreements();
     }
-  }, [selectedProfessional, user, selectedProfId]);
+  }, [selectedProfId, user]);
 
   const handleExportCSV = async () => {
     try {
@@ -276,13 +276,16 @@ export const FinanzasView: React.FC = () => {
           {/* Filtro Profesional */}
           <div className="w-full sm:w-auto">
             <select
-              value={selectedProfessional}
-              onChange={(e) => setSelectedProfessional(e.target.value)}
+              value={selectedProfId || 'Todos'}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedProfId(val === 'Todos' ? null : Number(val));
+              }}
               className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-[#1A5F7A] transition-all"
             >
               <option value="Todos">Todos los Profesionales</option>
               {dbProfessionals.map((p) => (
-                <option key={p.id} value={p.nombre}>{p.nombre}</option>
+                <option key={p.id} value={p.id}>{p.nombre}</option>
               ))}
             </select>
           </div>
@@ -316,7 +319,7 @@ export const FinanzasView: React.FC = () => {
       </div>
 
       {/* 2.5. NEGOCIACIÓN DE COMISIONES (SOLO PARA ADMIN Y CUANDO SE SELECCIONA UN MÉDICO INDIVIDUAL) */}
-      {user?.rol === 'admin_centro' && selectedProfessional !== 'Todos' && (
+      {user?.rol === 'admin_centro' && selectedProfId !== null && (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Formulario de Propuesta */}
           <div className="lg:col-span-1 border-r border-slate-100 pr-6 space-y-4">
