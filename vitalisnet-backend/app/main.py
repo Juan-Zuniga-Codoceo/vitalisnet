@@ -20,7 +20,9 @@ app = FastAPI(
 origins = [
     "http://localhost",
     "http://localhost:3000",
+    "http://localhost:5173",
     "http://localhost:8000",
+    "https://agenda.vitalisnet.synapsedev.cl",
 ]
 
 app.add_middleware(
