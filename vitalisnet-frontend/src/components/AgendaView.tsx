@@ -28,16 +28,17 @@ export interface Appointment {
   date: string; // e.g. "2026-06-03"
   price: number;
   status: 'pendiente' | 'confirmado' | 'pagada' | 'cancelada';
+  tag?: { nombre: string; color_hex: string };
 }
 
 const INITIAL_APPOINTMENTS: Appointment[] = [
-  { id: 1, professional: 'Dra. Eloísa Díaz', patient: 'Pedro Urdemales', rut: '15.222.333-5', time: '09:00 - 09:30', date: '2026-06-03', price: 60000, status: 'pagada' },
-  { id: 2, professional: 'Dr. Alejandro del Río', patient: 'María Loreto', rut: '18.444.555-K', time: '09:45 - 10:15', date: '2026-06-03', price: 45000, status: 'pendiente' },
-  { id: 3, professional: 'Dra. Eloísa Díaz', patient: 'Juan González', rut: '12.345.678-9', time: '10:30 - 11:00', date: '2026-06-03', price: 60000, status: 'pagada' },
-  { id: 4, professional: 'Dr. Alejandro del Río', patient: 'Catalina Muñoz', rut: '17.890.123-4', time: '11:15 - 11:45', date: '2026-06-03', price: 45000, status: 'cancelada' },
-  { id: 5, professional: 'Dra. Eloísa Díaz', patient: 'Andrés Bello', rut: '8.765.432-1', time: '12:00 - 12:30', date: '2026-06-03', price: 60000, status: 'confirmado' },
-  { id: 6, professional: 'Dr. Alejandro del Río', patient: 'Francisca Ovalle', rut: '19.876.543-2', time: '15:00 - 15:30', date: '2026-06-04', price: 45000, status: 'confirmado' },
-  { id: 7, professional: 'Dra. Eloísa Díaz', patient: 'José Miguel Carrera', rut: '7.654.321-0', time: '16:00 - 16:30', date: '2026-06-04', price: 60000, status: 'pendiente' },
+  { id: 1, professional: 'Dra. Eloísa Díaz', patient: 'Pedro Urdemales', rut: '15.222.333-5', time: '09:00 - 09:30', date: '2026-06-03', price: 60000, status: 'pagada', tag: { nombre: 'Procedimiento', color_hex: '#E88D4D' } },
+  { id: 2, professional: 'Dr. Alejandro del Río', patient: 'María Loreto', rut: '18.444.555-K', time: '09:45 - 10:15', date: '2026-06-03', price: 45000, status: 'pendiente', tag: { nombre: 'Consulta', color_hex: '#1A5F7A' } },
+  { id: 3, professional: 'Dra. Eloísa Díaz', patient: 'Juan González', rut: '12.345.678-9', time: '10:30 - 11:00', date: '2026-06-03', price: 60000, status: 'pagada', tag: { nombre: 'Control', color_hex: '#7F9C7A' } },
+  { id: 4, professional: 'Dr. Alejandro del Río', patient: 'Catalina Muñoz', rut: '17.890.123-4', time: '11:15 - 11:45', date: '2026-06-03', price: 45000, status: 'cancelada', tag: { nombre: 'Consulta', color_hex: '#1A5F7A' } },
+  { id: 5, professional: 'Dra. Eloísa Díaz', patient: 'Andrés Bello', rut: '8.765.432-1', time: '12:00 - 12:30', date: '2026-06-03', price: 60000, status: 'confirmado', tag: { nombre: 'Control', color_hex: '#7F9C7A' } },
+  { id: 6, professional: 'Dr. Alejandro del Río', patient: 'Francisca Ovalle', rut: '19.876.543-2', time: '15:00 - 15:30', date: '2026-06-04', price: 45000, status: 'confirmado', tag: { nombre: 'Procedimiento', color_hex: '#E88D4D' } },
+  { id: 7, professional: 'Dra. Eloísa Díaz', patient: 'José Miguel Carrera', rut: '7.654.321-0', time: '16:00 - 16:30', date: '2026-06-04', price: 60000, status: 'pendiente', tag: { nombre: 'Urgencia', color_hex: '#EF4444' } },
 ];
 
 export const AgendaView: React.FC = () => {
@@ -61,6 +62,13 @@ export const AgendaView: React.FC = () => {
   const [newPatientRut, setNewPatientRut] = useState('');
   const [newProfessional, setNewProfessional] = useState('Dra. Eloísa Díaz');
   const [newPrice, setNewPrice] = useState('60000');
+  const [tags] = useState([
+    { id: 1, nombre: 'Consulta', color_hex: '#1A5F7A' },
+    { id: 2, nombre: 'Control', color_hex: '#7F9C7A' },
+    { id: 3, nombre: 'Procedimiento', color_hex: '#E88D4D' },
+    { id: 4, nombre: 'Urgencia', color_hex: '#EF4444' }
+  ]);
+  const [selectedTagId, setSelectedTagId] = useState<number>(1);
 
   // Estados para editar cita existente
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
@@ -140,6 +148,8 @@ export const AgendaView: React.FC = () => {
     const endHour = m === 30 ? h + 1 : h;
     const endTime = `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`;
 
+    const activeTag = tags.find(t => t.id === selectedTagId);
+
     const newApp: Appointment = {
       id: Date.now(),
       patient: newPatientName,
@@ -149,6 +159,7 @@ export const AgendaView: React.FC = () => {
       time: `${selectedSlot.time} - ${endTime}`,
       price: Number(newPrice),
       status: 'pendiente',
+      tag: activeTag ? { nombre: activeTag.nombre, color_hex: activeTag.color_hex } : undefined
     };
 
     setAppointments(prev => [...prev, newApp]);
@@ -171,6 +182,7 @@ export const AgendaView: React.FC = () => {
 
   const handleCellClick = (dateStr: string, timeStr: string) => {
     setSelectedSlot({ date: dateStr, time: timeStr });
+    setSelectedTagId(1);
     setIsAddModalOpen(true);
   };
 
@@ -335,6 +347,14 @@ export const AgendaView: React.FC = () => {
                     <h4 className={`text-xs font-bold mt-1.5 truncate ${app.status === 'pagada' ? 'line-through text-slate-400' : 'text-slate-800'}`}>
                       {app.patient}
                     </h4>
+                    {app.tag && (
+                      <span 
+                        className="inline-block text-[8px] font-bold px-1.5 py-0.5 rounded-md mt-1"
+                        style={{ backgroundColor: `${app.tag.color_hex}15`, color: app.tag.color_hex }}
+                      >
+                        {app.tag.nombre}
+                      </span>
+                    )}
                   </div>
                   
                   <div className="mt-1 flex items-center justify-between text-[9px] text-slate-400 font-medium">
@@ -411,6 +431,21 @@ export const AgendaView: React.FC = () => {
                 >
                   <option value="Dra. Eloísa Díaz">Dra. Eloísa Díaz (Pediatría)</option>
                   <option value="Dr. Alejandro del Río">Dr. Alejandro del Río (Medicina General)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Procedimiento / Etiqueta Médica
+                </label>
+                <select
+                  value={selectedTagId}
+                  onChange={(e) => setSelectedTagId(Number(e.target.value))}
+                  className="block w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1A5F7A] focus:border-[#1A5F7A] transition-all bg-white"
+                >
+                  {tags.map(t => (
+                    <option key={t.id} value={t.id}>{t.nombre}</option>
+                  ))}
                 </select>
               </div>
 

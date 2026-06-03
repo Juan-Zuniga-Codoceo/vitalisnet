@@ -11,7 +11,8 @@ import {
   X, 
   User, 
   ArrowUpRight, 
-  Receipt
+  Receipt,
+  Download
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import isBetween from 'dayjs/plugin/isBetween';
@@ -84,6 +85,48 @@ export const FinanzasView: React.FC = () => {
       fetchAgreements();
     }
   }, [selectedProfessional, user, selectedProfId]);
+
+  const handleExportCSV = async () => {
+    try {
+      let url = '/finanzas/report/export';
+      const params: string[] = [];
+      if (selectedProfId) {
+        params.push(`professional_id=${selectedProfId}`);
+      }
+      
+      let startStr = '';
+      let endStr = '';
+      if (selectedRange === 'Hoy') {
+        startStr = dayjs().startOf('day').toISOString();
+        endStr = dayjs().endOf('day').toISOString();
+      } else if (selectedRange === 'Semana') {
+        startStr = dayjs().startOf('week').toISOString();
+        endStr = dayjs().endOf('week').toISOString();
+      } else if (selectedRange === 'Mes') {
+        startStr = dayjs().startOf('month').toISOString();
+        endStr = dayjs().endOf('month').toISOString();
+      }
+      
+      if (startStr) params.push(`fecha_inicio=${startStr}`);
+      if (endStr) params.push(`fecha_fin=${endStr}`);
+      
+      if (params.length > 0) {
+        url += `?${params.join('&')}`;
+      }
+
+      const response = await axios.get(url, { responseType: 'blob' });
+      const downloadUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.setAttribute('download', `reporte_finanzas_${dayjs().format('YYYY-MM-DD')}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+    } catch (err) {
+      console.error("Error al exportar reporte:", err);
+      alert("Error al exportar el reporte financiero.");
+    }
+  };
 
   const handleProposeCommission = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -260,6 +303,15 @@ export const FinanzasView: React.FC = () => {
               </button>
             ))}
           </div>
+
+          {/* Botón Exportar Excel (.csv) */}
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center space-x-1.5 px-4 py-2.5 bg-[#7F9C7A] hover:bg-[#7F9C7A]/95 text-white rounded-xl text-xs font-bold transition-all shadow-sm focus:outline-none w-full sm:w-auto justify-center"
+          >
+            <Download className="h-4 w-4" />
+            <span>Exportar Excel (.csv)</span>
+          </button>
         </div>
       </div>
 

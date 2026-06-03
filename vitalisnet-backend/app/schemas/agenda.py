@@ -87,6 +87,25 @@ class PatientResponse(PatientBase):
 
 
 # ---------------------------------------------
+# ---------------------------------------------
+# Esquemas para MedicalTag (Etiquetas de Procedimientos)
+# ---------------------------------------------
+class MedicalTagBase(BaseModel):
+    nombre: str = Field(..., max_length=100, description="Nombre de la etiqueta")
+    color_hex: str = Field(..., max_length=10, description="Color en formato hex (ej: #E88D4D)")
+
+
+class MedicalTagCreate(MedicalTagBase):
+    pass
+
+
+class MedicalTagResponse(MedicalTagBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    clinic_id: int
+
+
+# ---------------------------------------------
 # Esquemas para Appointment (Citas Médicas)
 # ---------------------------------------------
 class AppointmentBase(BaseModel):
@@ -94,6 +113,7 @@ class AppointmentBase(BaseModel):
     patient_id: int
     precio: float = Field(..., gt=0, description="Precio de la cita médica")
     estado: AppointmentState = Field(default=AppointmentState.PENDIENTE, description="Estado de la cita")
+    tag_id: Optional[int] = Field(None, description="ID de la etiqueta médica (opcional)")
 
 
 class AppointmentCreate(AppointmentBase):
@@ -114,6 +134,7 @@ class AppointmentUpdate(BaseModel):
     fecha_fin: Optional[datetime] = None
     precio: Optional[float] = Field(None, gt=0)
     estado: Optional[AppointmentState] = None
+    tag_id: Optional[int] = None
 
     @model_validator(mode="after")
     def verificar_fechas(self) -> Self:
@@ -128,3 +149,4 @@ class AppointmentResponse(AppointmentBase):
     id: int
     fecha_inicio: datetime
     fecha_fin: datetime
+    tag: Optional[MedicalTagResponse] = None

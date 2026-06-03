@@ -4,11 +4,12 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import Range
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.models.auth import User
 from app.dependencies.auth import get_current_user
-from app.models.agenda import Appointment, Clinic, Patient, Professional
+from app.models.agenda import Appointment, Clinic, Patient, Professional, MedicalTag
 from app.schemas.agenda import (
     AppointmentCreate,
     AppointmentResponse,
@@ -18,6 +19,8 @@ from app.schemas.agenda import (
     PatientResponse,
     ProfessionalCreate,
     ProfessionalResponse,
+    MedicalTagCreate,
+    MedicalTagResponse,
 )
 from app.services.notifications import enviar_recordatorio_whatsapp
 
@@ -187,6 +190,16 @@ async def create_appointment(
             detail="El paciente especificado no existe.",
         )
 
+    # Validar etiqueta si se proporciona
+    if appointment.tag_id:
+        tag_query = select(MedicalTag).where(MedicalTag.id == appointment.tag_id)
+        tag_result = await db.execute(tag_query)
+        if not tag_result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="La etiqueta médica especificada no existe.",
+            )
+
     # 2. Construcción de modelo convirtiendo fechas al rango nativo (TSTZRANGE)
     db_appointment = Appointment(
         professional_id=appointment.professional_id,
@@ -194,6 +207,7 @@ async def create_appointment(
         rango_horario=Range(appointment.fecha_inicio, appointment.fecha_fin),
         precio=appointment.precio,
         estado=appointment.estado,
+        tag_id=appointment.tag_id,
     )
 
     db.add(db_appointment)
@@ -234,4 +248,72 @@ async def create_appointment(
         enlace_confirmar=confirm_link,
     )
 
+    # Recargar relaciones requeridas para la respuesta
+    stmt_reload = (
+        select(Appointment)
+        .options(selectinload(Appointment.tag))
+        .where(Appointment.id == db_appointment.id)
+    )
+    res_reload = await db.execute(stmt_reload)
+    db_appointment = res_reload.scalar_one()
+
     return db_appointment
+
+
+# ---------------------------------------------
+# Endpoints para Etiquetas Médicas (Medical Tags)
+# ---------------------------------------------
+@router.post(
+    "/agenda/tags",
+    response_model=MedicalTagResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear una etiqueta médica para la clínica",
+)
+async def create_medical_tag(
+    tag: MedicalTagCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MedicalTag:
+    if not current_user.clinic_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El usuario no tiene una clínica asociada.",
+        )
+    
+    db_tag = MedicalTag(
+        clinic_id=current_user.clinic_id,
+        nombre=tag.nombre,
+        color_hex=tag.color_hex
+    )
+    db.add(db_tag)
+    try:
+        await db.commit()
+        await db.refresh(db_tag)
+    except IntegrityError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Error al registrar la etiqueta: {str(e.orig)}",
+        )
+    return db_tag
+
+
+@router.get(
+    "/agenda/tags",
+    response_model=List[MedicalTagResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Listar todas las etiquetas médicas de la clínica del usuario",
+)
+async def list_medical_tags(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> List[MedicalTag]:
+    if not current_user.clinic_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El usuario no tiene una clínica asociada.",
+        )
+    
+    query = select(MedicalTag).where(MedicalTag.clinic_id == current_user.clinic_id)
+    result = await db.execute(query)
+    return list(result.scalars().all())

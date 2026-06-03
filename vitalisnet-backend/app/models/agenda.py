@@ -66,12 +66,25 @@ class Patient(Base):
     )
 
 
+class MedicalTag(Base):
+    __tablename__ = "medical_tags"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    clinic_id: Mapped[int] = mapped_column(ForeignKey("clinics.id"), nullable=False)
+    nombre: Mapped[str] = mapped_column(String(100), nullable=False)
+    color_hex: Mapped[str] = mapped_column(String(10), nullable=False, default="#E88D4D")
+
+    # Relaciones
+    clinic: Mapped["Clinic"] = relationship("Clinic")
+
+
 class Appointment(Base):
     __tablename__ = "appointments"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     professional_id: Mapped[int] = mapped_column(ForeignKey("professionals.id"), nullable=False)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), nullable=False)
+    tag_id: Mapped[Optional[int]] = mapped_column(ForeignKey("medical_tags.id"), nullable=True)
 
     # Rango horario nativo de Postgres (TSTZRANGE) para control de fechas y exclusión
     rango_horario: Mapped[Range] = mapped_column(TSTZRANGE, nullable=False)
@@ -86,6 +99,7 @@ class Appointment(Base):
     # Relaciones
     professional: Mapped["Professional"] = relationship("Professional", back_populates="appointments")
     patient: Mapped["Patient"] = relationship("Patient", back_populates="appointments")
+    tag: Mapped[Optional["MedicalTag"]] = relationship("MedicalTag")
 
     # Restricción de exclusión GIST para evitar double-booking del mismo profesional
     __table_args__ = (

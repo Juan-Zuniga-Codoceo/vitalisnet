@@ -1,11 +1,14 @@
+import csv
+import io
 from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from fastapi.responses import StreamingResponse
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.agenda import Appointment, Professional
+from app.models.agenda import Appointment, Professional, Patient, MedicalTag, AppointmentState
 from app.models.auth import User, UserRole
 from app.models.finanzas import FinancialTransaction, Payment, CommissionAgreement, CommissionState
 from app.schemas.finanzas import (
@@ -62,6 +65,98 @@ async def pay_appointment(
 # ---------------------------------------------
 # Endpoints para Reportes Financieros
 # ---------------------------------------------
+@router.get(
+    "/finanzas/report/export",
+    summary="Exportar reporte financiero en formato CSV",
+)
+async def export_financial_report(
+    professional_id: Optional[int] = Query(None, description="ID del profesional para filtrar"),
+    fecha_inicio: Optional[datetime] = Query(None, description="Fecha de inicio para filtrar (ISO 8601)"),
+    fecha_fin: Optional[datetime] = Query(None, description="Fecha de fin para filtrar (ISO 8601)"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Busca las citas con estado 'pagado' que pertenezcan a la clínica del usuario actual,
+    aplica filtros de profesional y fechas si se especifican, y retorna un
+    StreamingResponse (CSV) estructurado con codificación utf-8-sig y delimitador ';'.
+    """
+    if not current_user.clinic_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El usuario no tiene una clínica asociada.",
+        )
+
+    # Construir consulta
+    stmt = (
+        select(
+            Appointment,
+            Patient,
+            Professional,
+            MedicalTag,
+            FinancialTransaction
+        )
+        .select_from(Appointment)
+        .join(Patient, Patient.id == Appointment.patient_id)
+        .join(Professional, Professional.id == Appointment.professional_id)
+        .outerjoin(MedicalTag, MedicalTag.id == Appointment.tag_id)
+        .join(Payment, Payment.appointment_id == Appointment.id)
+        .join(FinancialTransaction, FinancialTransaction.payment_id == Payment.id)
+        .where(Professional.clinic_id == current_user.clinic_id)
+        .where(Appointment.estado == AppointmentState.PAGADO)
+    )
+
+    if professional_id:
+        stmt = stmt.where(Appointment.professional_id == professional_id)
+    if fecha_inicio:
+        stmt = stmt.where(func.lower(Appointment.rango_horario) >= fecha_inicio)
+    if fecha_fin:
+        stmt = stmt.where(func.lower(Appointment.rango_horario) <= fecha_fin)
+
+    stmt = stmt.order_by(func.lower(Appointment.rango_horario).asc())
+    
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    def generate_csv():
+        output = io.StringIO()
+        writer = csv.writer(output, delimiter=";")
+        
+        # Cabecera exacta
+        writer.writerow([
+            "Fecha",
+            "Paciente",
+            "Profesional",
+            "Tipo de Consulta/Etiqueta",
+            "Valor Total",
+            "Ingreso Profesional"
+        ])
+        yield output.getvalue().encode("utf-8-sig")
+        output.truncate(0)
+        output.seek(0)
+        
+        for apt, pat, prof, tag, tx in rows:
+            fecha_str = apt.fecha_inicio.strftime("%Y-%m-%d %H:%M") if apt.fecha_inicio else ""
+            tag_name = tag.nombre if tag else "Consulta General"
+            
+            writer.writerow([
+                fecha_str,
+                pat.nombre,
+                prof.nombre,
+                tag_name,
+                f"{int(tx.monto_total)}",
+                f"{int(tx.monto_profesional)}"
+            ])
+            yield output.getvalue().encode("utf-8-sig")
+            output.truncate(0)
+            output.seek(0)
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="reporte_financiero.csv"',
+        "Content-Type": "text/csv; charset=utf-8-sig"
+    }
+
+    return StreamingResponse(generate_csv(), headers=headers)
 @router.get(
     "/finance/reports/professional/{professional_id}",
     response_model=FinancialReportResponse,
