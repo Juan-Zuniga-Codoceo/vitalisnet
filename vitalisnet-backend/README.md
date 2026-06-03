@@ -78,3 +78,30 @@ El backend incluye scripts de integración para comprobar la funcionalidad de ca
     ```bash
     python3 scratch/test_auth.py
     ```
+
+---
+
+## 🚀 Entorno de Demostración (Demo Access)
+
+Para facilitar las pruebas de la plataforma y validar los flujos clínicos y administrativos del MVP, el sistema cuenta con credenciales precargadas a través del script de seeding de base de datos. Se puede ingresar directamente desde la Landing Page usando los accesos rápidos o digitando las credenciales manualmente:
+
+### 🩺 Acceso Profesional Médico
+*   **Usuario**: `doctor@vitalisnet.cl`
+*   **Contraseña**: `password123`
+*   **Capacidades**: Vista de agenda médica semanal, timelines de fichas clínicas dinámicas con historial cronológico, evolución adaptativa según especialidad (Psicología con Anamnesis / Medicina General con signos vitales y CIE-10), y reportes individuales de honorarios profesionales (70% de las consultas cobradas).
+
+### 🏢 Acceso Administrador de Centro
+*   **Usuario**: `admin@vitalisnet.cl`
+*   **Contraseña**: `password123`
+*   **Capacidades**: Vista completa de agenda del centro, creación de clínicas y profesionales, gestión financiera global, cobro express de consultas y reportes agregados del centro médico (30% de las consultas cobradas).
+
+---
+
+## 💳 Modelo de Suscripción Freemium (Mercado Pago Chile)
+
+La monetización comercial de VitalisNet está integrada de forma segura a través del servicio de suscripciones recurrentes de **Mercado Pago Chile**. 
+
+*   **Periodo de Prueba**: Los profesionales de la salud obtienen **1 mes de prueba gratis** (trial de 30 días configurado en Mercado Pago con `has_trial: true` y `trial_duration: 30`).
+*   **Tarifa Única**: Terminado el periodo de prueba, el cobro automatizado recurrente mensual es de **$29.990 CLP / mes**.
+*   **Flujo**: El frontend solicita al backend crear una preferencia de suscripción recurrente mediante el endpoint `POST /api/v1/payments/subscribe`, retornando el enlace de checkout (`init_point`) seguro de Mercado Pago para procesar la transacción.
+
