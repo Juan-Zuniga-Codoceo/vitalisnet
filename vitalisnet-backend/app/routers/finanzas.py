@@ -11,6 +11,7 @@ from app.models.finanzas import FinancialTransaction, Payment
 from app.schemas.finanzas import FinancialReportResponse, PaymentCreate, PaymentResponse
 from app.services.finanzas import registrar_y_procesar_pago
 from app.dependencies.auth import get_current_user
+from app.services.mercadopago import mercadopago_service
 
 router = APIRouter(tags=["Finanzas"])
 
@@ -132,4 +133,31 @@ async def get_professional_financial_report(
         "monto_profesional": float(monto_profesional),
         "monto_centro": float(monto_centro),
         "citas_pagadas_cantidad": citas_pagadas_cantidad,
+    }
+
+
+# ---------------------------------------------
+# Endpoints para Suscripción Mercado Pago
+# ---------------------------------------------
+@router.post(
+    "/payments/subscribe",
+    status_code=status.HTTP_200_OK,
+    summary="Crear una preferencia de suscripción con periodo de prueba de 30 días",
+)
+async def create_subscription_preference():
+    """
+    Crea una preferencia de suscripción recurrente en Mercado Pago.
+    Retorna la URL de Mercado Pago (init_point o sandbox_init_point)
+    para redirigir al usuario al flujo de suscripción.
+    """
+    res = mercadopago_service.crear_preferencia_suscripcion()
+    if not res["success"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Error al conectar con Mercado Pago: {res.get('error')}"
+        )
+    return {
+        "plan_id": res["plan_id"],
+        "init_point": res["init_point"],
+        "sandbox_init_point": res["sandbox_init_point"]
     }

@@ -6,6 +6,7 @@ import { Search } from 'lucide-react';
 import { AgendaView } from './components/AgendaView';
 import { FichasView } from './components/FichasView';
 import { FinanzasView } from './components/FinanzasView';
+import { LandingPage } from './components/LandingPage';
 
 const INITIAL_PATIENTS = [
   { id: 1, name: 'Pedro Urdemales', rut: '15.222.333-5', email: 'pedro.urdemales@gmail.com', phone: '+56 9 8765 4321', lastVisit: '2026-05-15' },
@@ -98,20 +99,25 @@ const PacientesView: React.FC = () => {
 function App() {
   const { isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState('agenda');
+  const [currentView, setCurrentView] = useState<'landing' | 'login'>('landing');
 
   // Enrutamiento condicional
-  if (!isAuthenticated) {
-    return <Login />;
+  if (isAuthenticated) {
+    return (
+      <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
+        {activeTab === 'agenda' && <AgendaView />}
+        {activeTab === 'pacientes' && <PacientesView />}
+        {activeTab === 'fichas' && <FichasView />}
+        {activeTab === 'finanzas' && <FinanzasView />}
+      </Layout>
+    );
   }
 
-  return (
-    <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
-      {activeTab === 'agenda' && <AgendaView />}
-      {activeTab === 'pacientes' && <PacientesView />}
-      {activeTab === 'fichas' && <FichasView />}
-      {activeTab === 'finanzas' && <FinanzasView />}
-    </Layout>
-  );
+  if (currentView === 'landing') {
+    return <LandingPage onGoToLogin={() => setCurrentView('login')} />;
+  }
+
+  return <Login onGoBack={() => setCurrentView('landing')} />;
 }
 
 export default App;

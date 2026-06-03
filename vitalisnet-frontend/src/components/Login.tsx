@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Mail, Lock, Eye, EyeOff, Activity, Loader2, AlertCircle } from 'lucide-react';
 
-export const Login: React.FC = () => {
+interface LoginProps {
+  onGoBack?: () => void;
+}
+
+export const Login: React.FC<LoginProps> = ({ onGoBack }) => {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -130,8 +134,19 @@ export const Login: React.FC = () => {
           </div>
         </form>
 
-        <div className="text-center pt-2">
-          <p className="text-xs text-slate-400">
+        {onGoBack && (
+          <div className="text-center pt-2">
+            <button
+              onClick={onGoBack}
+              className="text-xs font-bold text-[#1A5F7A] hover:text-[#1A5F7A]/80 transition-colors"
+            >
+              ← Volver al Inicio
+            </button>
+          </div>
+        )}
+
+        <div className="text-center pt-4 border-t border-slate-100 mt-4">
+          <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
             Soporte VitalisNet &copy; {new Date().getFullYear()} — SynapseDev
           </p>
         </div>
